@@ -249,7 +249,7 @@ paths:
           description: Invalid ID supplied
         '202':
           description: Account not found
-  '/bank/WithdrowTo/{user}':
+  '/bank/WithdrowTo/{userid}':
     get:
       tags:
         - bank
@@ -257,7 +257,7 @@ paths:
       description: Withdraws money from family bank to user
       operationId: getOrderById
       parameters:
-        - name: user
+        - name: userid
           in: path
           description: ID of Family that needs to be fetched
           required: true
@@ -443,20 +443,13 @@ paths:
               $ref: '#/components/schemas/Transactions'
         description: Created transaction object
         required: true
-  /TransactionList/UpdateExtra{extra}:
+  /TransactionList/UpdateExtra:
     put:
       tags:
         - TransactionList
       summary: Update extra info
       description: Updating extra info.
       operationId: UpdateExtra
-      parameters:
-        - name: extra
-          in: path
-          description: Extra
-          required: true
-          schema:
-            type: string
       responses:
         '200':
           description: successful operation
@@ -472,7 +465,7 @@ paths:
         description: Update extra
         required: true
 
-  /TransactionList/GetById{GetTById}:
+  /TransactionList/{GetTById}:
     get:
       tags:
         - TransactionList
@@ -500,14 +493,14 @@ paths:
         '202':
           description: Id not found
           
-  /TransactionList/GetUser{UserTransactions}:    
+  /TransactionList/Get_all_user_transactions/{UserTransactionsByID}:    
     get:
       tags:
         - TransactionList
       summary: Get user transactions
       operationId: getUserTransaction
       parameters:
-        - name: UserTransactions
+        - name: UserTransactionsByID
           in: path
           description:  Id of transaction.
           required: true
@@ -570,6 +563,9 @@ components:
           type: string
         phone:
           type: string
+        FamilyId:
+          type: integer
+          format: int32
         userStatus:
           type: integer
           format: int32
