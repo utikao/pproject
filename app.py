@@ -1,26 +1,17 @@
-import json
+import os.path
 
-from flask import Flask, request, jsonify, render_template, make_response, Response
+import bcrypt as bcrypt
+from flask import Flask, jsonify, request, make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
-import os
-from sqlalchemy import String, Integer, ForeignKey,  Date, BOOLEAN
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.testing.schema import Column
-from sqlalchemy.orm import relationship
-from sqlalchemy import Column
-import bcrypt
-app=Flask(os.name)
-basedir=os.path.abspath(os.path.dirname(os.file))
-
-#+os.path.join(basedir, 'db.postgresql')
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:5528@localhost:5432/lll'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS']=False
-
-db=SQLAlchemy(app)
-
-ma=Marshmallow(app)
+from flask import Flask, Response
+from flask import jsonify
+import json
+from flask import make_response
+from flask import request
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import insert, null
 
 
 def to_json(inst, cls):
@@ -41,224 +32,215 @@ def to_json(inst, cls):
         else:
             d[c.name] = v
     return json.dumps(d)
-class Event(db.Model):
-    tablename = "Event"
-    event_id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(20), nullable=False)
-    data = db.Column(db.Date, nullable=False)
 
-    def init(self,  name, data):
-        self.name=name
-        self.data=data
-class Ticket(db.Model):
-    tablename = "Ticket"
-    ticket_id = db.Column(db.Integer, primary_key=True)
-    price = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(20), nullable=False)
-    event_event_id = db.Column(db.Integer, ForeignKey("Event.event_id"))
-    #Event = relationship("Event")
 
-    def init(self, price, status, event_event_id):
-        self.price=price
-        self.status=status
-        self.event_event_id=event_event_id
-class User(db.Model):
-    tablename = "User"
-    user_id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), nullable=False)
-    firstName = db.Column(db.String(20), nullable=False)
-    lastName = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(20), nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
-    userStatus = db.Column(db.Integer, nullable=False)
+app = Flask(__name__)
 
-    def init(self,  username, firstName, lastName, email, password, phone,userStatus):
-        self.username=username
-        self.firstName=firstName
-        self.lastName=lastName
-        self.email=email
-        self.password=password
-        self.phone=phone
-        self.userStatus=userStatus
-class Order(db.Model):
-    tablename = "Order"
-    order_id = db.Column(db.Integer, primary_key=True)
-    quantity = db.Column(db.Integer, nullable=False)
-    oredDate = db.Column(db.Date, nullable=False)
-    status = db.Column(db.String(20), nullable=False)
-    complete = db.Column(db.BOOLEAN, nullable=False)
-    ticket_ticket_id = db.Column(db.Integer, ForeignKey("Ticket.ticket_id"))
-    user_user_id = db.Column(db.Integer, ForeignKey("User.user_id"))
-    #Ticket = relationship("Ticket")
-    #User = relationship("User")
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:1462357980@localhost:5432/lab_7'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+ma = Marshmallow(app)
 
-    def init(self,  quantity, oredDate ,status, complete, ticket_ticket_id,user_user_id):
-        self.quantity=quantity
-        self.oredDate=oredDate
-        self.status=status
-        self.complete=complete
-        self.ticket_ticket_id=ticket_ticket_id
-        self.user_user_id=user_user_id
-class ProductSchema(ma.Schema):
+
+class Bank(db.Model):
+    id = db.Column(db.Integer(), primary_key=True)
+    name = db.Column(db.String(100), default=False)
+    amountOfMoney = db.Column(db.Integer(), nullable=False)
+
+    def __init__(self, name, amountOfMoney):
+        self.name = name
+        self.amountOfMoney = amountOfMoney
+
+
+class BankSchema(ma.Schema):
     class Meta:
-        fields=('id', 'name', 'description', 'price', 'qty')
-class EventSchema(ma.Schema):
+        fields = ('id', 'name', 'amountOfMoney', 'transactions')
+
+
+class BankSchemaAmount(ma.Schema):
     class Meta:
-        fields=('event_id', 'name', 'data')
+        fields = ('name', 'amountOfMoney')
 
 
-event_schema=EventSchema()
-events_schema=EventSchema(many=True)
-
-class TicketSchema(ma.Schema):
-    class Meta:
-        fields=('ticket_id', 'price', 'status','event_event_id')
-
-ticket_schema=TicketSchema()
-tickets_schema=TicketSchema(many=True)
-
-class UserSchema(ma.Schema):
-    class Meta:
-        fields=('user_id', 'username', 'firstName', 'lastName', 'email', 'password', 'phone','userStatus')
-
-user_schema=UserSchema()
-users_schema=UserSchema(many=True)
-
-class OrderSchema(ma.Schema):
-    class Meta:
-        fields=('order_id', 'quantity', 'oredDate' ,'status', 'complete', 'ticket_ticket_id', 'user_user_id')
+bank_schema = BankSchema()
+bank_schema_amount = BankSchemaAmount()
 
 
-order_schema=OrderSchema()
-orders_schema=OrderSchema(many=True)
+@app.route('/bank', methods=['POST'])
+def add_createNewAccount():
+    name = request.json['name']
+    amountOfMoney = request.json['amountOfMoney']
 
-#методи для івенту
-@app.route('/event', methods=['POST'])
-def add_event():
-    name=request.json['name']
-    data = request.json['data']
-    new_event = Event(name, data)
+    new_bank = Bank(name, amountOfMoney)
 
     try:
-        db.session.add(new_event)
+        db.session.add(new_bank)
         db.session.commit()
     except IntegrityError:
         print('Incorrect data')
-        return make_response(jsonify({'error': 'Incorrect data'}), 409)
+        return make_response(jsonify({'error': 'Incorrect data'}), 404)
+
+    return bank_schema.jsonify(new_bank)
 
 
-    # db.session.add(new_event)
-    # db.session.commit()
-    #
-    # return event_schema.jsonify(new_event)
+@app.route('/bank/<id>', methods=['GET'])
+def get_bank(id):
+    # try:
+    #     a = to_json(db.session.query(Bank).filter_by(id=id).one,Bank)
+    #     return Response(response=a, status=200, mimetype="application/json")
+    # except:
+    #     return make_response(jsonify({'error': 'User not found'}), 404)
+
+    bamk = Bank.query.get(id)
+    return bank_schema.jsonify(bamk)
 
 
-@app.route('/event', methods=['GET'])
-def get_events():
-    all_events = Event.query.all()
-    result = events_schema.dump(all_events)
-    return jsonify(result)
+@app.route('/bank/<id>', methods=['PUT'])
+def update_bank(id):
+    a = db.session.query(Bank).filter_by(id=id).one()
+    if not a:
+        return make_response(jsonify({'error': 'Not found'}), 404)
+
+    bamk = Bank.query.get(id)
+
+    name = request.json['name']
+    amountOfMoney = request.json['amountOfMoney']
+
+    bamk.name = name
+    bamk.amountOfMoney = amountOfMoney
+
+    db.session.commit()
+
+    return bank_schema.jsonify(bamk)
 
 
-@app.route('/event/<id>', methods=['GET'])
-def get_event(id):
+@app.route('/bank/<id>', methods=['DELETE'])
+def delete_bank(id):
     try:
-        a = to_json(db.ession.query(Event).filter_by(id=id).one(), Event)
-        return Response(response=a, status=200, mimetype="application/json")
-    except:
-        return make_response(jsonify({'error': 'User not found'}), 404)
-    # event = Event.query.get(id)
-    # return event_schema.jsonify(event)
-
-
-@app.route('/event/<id>', methods=['DELETE'])
-def delete_event(id):
-    try:
-        event = db.session.query(Event).filter_by(id=id).first()
-        db.session.delete(event)
+        bamk = db.session.query(Bank).filter_by(id=id).first()
+        db.session.delete(bamk)
         db.session.commit()
         return {
-            "msg": "User deleted successfully",
+            "msg": "Bank deleted successfully",
             "id": id
         }
     except:
         return "User not found", 404
-    # event = Event.query.get(id)
-    # db.session.delete(event)
-    # db.session.commit()
-
-    # return event_schema.jsonify(event)
 
 
-# методи для тікету
-@app.route('/ticket', methods=['POST'])
-def add_ticket():
-    price = request.json['price']
-    status = request.json['status']
-    event_event_id = request.json['event_event_id']
+########################################################################
 
-    new_ticket = Ticket(price, status, event_event_id)
+
+class Family(db.Model):
+    id = db.Column(db.Integer(), primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    BankId = db.Column(db.Integer(), db.ForeignKey(Bank.id), nullable=False)
+
+    def __init__(self, name, BankId):
+        self.name = name
+        self.BankId = BankId
+
+
+class FamilySchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'name', 'BankId')
+
+
+family_schema = FamilySchema()
+
+
+@app.route('/family', methods=['POST'])
+def add_family():
+    name = request.json['name']
+    BankId = request.json['BankId']
+
+    new_family = Family(name, BankId)
 
     try:
-        db.session.add(new_ticket)
+        db.session.add(new_family)
         db.session.commit()
     except IntegrityError:
         print('Incorrect data')
         return make_response(jsonify({'error': 'Incorrect data'}), 409)
-        # tasks.append(task)
-    a = to_json(new_ticket, Ticket)
-    return Response(response=a, status=200, mimetype="application/json")
 
-    # db.session.add(new_ticket)
-    # db.session.commit()
-    #
-    # return ticket_schema.jsonify(new_ticket)
+    return family_schema.jsonify(new_family)
 
 
-@app.route('/ticket/<id>', methods=['DELETE'])
-def delete_ticket(id):
+@app.route('/family/<id>', methods=['GET'])
+def get_family(id):
     try:
-        ticket = db.session.query(Ticket).filter_by(id=id).first()
-        db.session.delete(ticket)
+        a = to_json(db.session.query(Family).filter_by(id=id).one, Family)
+        return Response(response=a, status=200, mimetype="application/json")
+    except:
+        return make_response(jsonify({'error': 'Family not found'}), 404)
+
+
+@app.route('/family/<id>', methods=['PUT'])
+def update_family(id):
+    a = db.session.query(Family).filter_by(id=id).one()
+    if not a:
+        return make_response(jsonify({'error': 'Not found'}), 404)
+    family = Family.query.get(id)
+
+    name = request.json['name']
+    BankId = request.json['BankId']
+
+    family.name = name
+    family.BankId = BankId
+
+    db.session.commit()
+
+    return family_schema.jsonify(family)
+
+
+@app.route('/family/<id>', methods=['DELETE'])
+def delete_family(id):
+    try:
+        family = db.session.query(Family).filter_by(id=id).first()
+        db.session.delete(family)
         db.session.commit()
         return {
-            "msg": "Ticket deleted successfully",
+            "msg": "Family deleted successfully",
             "id": id
         }
     except:
-        return "Ticket not found", 404
-    # ticket = Ticket.query.get(id)
-    # db.session.delete(ticket)
-    # db.session.commit()
-    #
-    # return ticket_schema.jsonify(ticket)
+        return "User not found", 404
 
 
-@app.route('/ticket', methods=['GET'])
-def get_tickets():
-
-    all_tickets = Ticket.query.all()
-    result = tickets_schema.dump(all_tickets)
-    return jsonify(result)
+#########################################################################
 
 
-@app.route('/ticket/<id>', methods=['GET'])
-def get_ticket(id):
-    try:
-        a = to_json(db.session.query(Ticket).filter_by(id=id).one(), Ticket)
-        return Response(response=a, status=200, mimetype="application/json")
-    except:
-        return make_response(jsonify({'error': 'Event not found'}), 404)
-    # ticket = Ticket.query.get(id)
-    # return ticket_schema.jsonify(ticket)
+class Users(db.Model):
+    id = db.Column(db.Integer(), primary_key=True)
+    username = db.Column(db.String(100), nullable=False)
+    firstName = db.Column(db.String(100), nullable=False)
+    lastName = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), nullable=True)
+    password = db.Column(db.String(1000), nullable=False)
+    phone = db.Column(db.String(100), nullable=True)
+    FamilyId = db.Column(db.Integer(), db.ForeignKey(Family.id), nullable=False)
+    userStatus = db.Column(db.Integer(), nullable=False)
+
+    def __init__(self, username, firstName, lastName, email, password, phone, FamilyId, userStatus):
+        self.username = username
+        self.firstName = firstName
+        self.lastName = lastName
+        self.email = email
+        self.password = password
+        self.phone = phone
+        self.FamilyId = FamilyId
+        self.userStatus = userStatus
 
 
-# get single
+class UsersSchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'username', 'firstName', 'lastName', 'email', 'phone', 'FamilyId', 'userStatus', 'Family')
 
 
-# все для юзера
-@app.route('/users', methods = ['POST'])
+users_schema = UsersSchema()
+
+
+@app.route('/users', methods=['POST'])
 def add_user():
     username = request.json['username']
     firstName = request.json['firstName']
@@ -269,12 +251,11 @@ def add_user():
     FamilyId = request.json['FamilyId']
     userStatus = request.json['userStatus']
 
-    hashed=bcrypt.hashpw(password.encode('utf-8','ignore'), bcrypt.gensalt())
+    hashed = bcrypt.hashpw(password.encode('utf-8', 'ignore'), bcrypt.gensalt())
 
-    new_users = User(username, firstName , lastName , email , hashed , phone , FamilyId, userStatus )
+    new_users = Users(username, firstName, lastName, email, hashed, phone, FamilyId, userStatus)
 
-    tvins = (db.session.query(User).filter_by(username=new_users.username).all())
-
+    tvins = (db.session.query(Users).filter_by(username=new_users.username).all())
 
     if tvins != []:
         return make_response(jsonify({'error': 'Username is busy'}), 404)
@@ -286,30 +267,30 @@ def add_user():
         return make_response(jsonify({'error': 'Incorrect data'}), 404)
     # tasks.append(task)
 
+    # return Response(users_schema.jsonify(new_users),status=200)
+    return users_schema.jsonify(new_users)
 
-   # return Response(users_schema.jsonify(new_users),status=200)
-    return  users_schema.jsonify(new_users)
 
-@app.route('/users/<id>', methods = ['GET'])
+@app.route('/users/<id>', methods=['GET'])
 def get_users(id):
     try:
-        a = to_json(db.session.query(User).filter_by(id=id).one(), User)
+        a = to_json(db.session.query(Users).filter_by(id=id).one(), Users)
         return Response(response=a, status=200, mimetype="application/json")
     except:
         return make_response(jsonify({'error': 'User not found'}), 404)
 
 
-@app.route('/users/<id>', methods = ['PUT'])
+@app.route('/users/<id>', methods=['PUT'])
 def update_users(id):
-    u = db.session.query(User).filter_by(id=id).one()
+    u = db.session.query(Users).filter_by(id=id).one()
     if not u:
         return make_response(jsonify({'error': 'Not found'}), 404)
     if request.json.get('username'):
-        tvins = (db.session.query(User).filter_by(username=request.json.get('username')).all())
+        tvins = (db.session.query(Users).filter_by(username=request.json.get('username')).all())
         if tvins != []:
             return make_response(jsonify({'error': 'username is busy'}), 409)
 
-    users = User.query.get(id)
+    users = Users.query.get(id)
 
     firstName = request.json['firstName']
     lastName = request.json['lastName']
@@ -329,12 +310,13 @@ def update_users(id):
 
     db.session.commit()
 
-    return  users_schema.jsonify(users)
+    return users_schema.jsonify(users)
 
-@app.route('/users/<id>', methods = ['DELETE'])
+
+@app.route('/users/<id>', methods=['DELETE'])
 def delete_users(id):
     try:
-        users = db.session.query(User).filter_by(id=id).first()
+        users = db.session.query(Users).filter_by(id=id).first()
         db.session.delete(users)
         db.session.commit()
         return {
@@ -345,48 +327,142 @@ def delete_users(id):
         return "User not found", 404
 
 
-# вся для ордера
-@app.route('/order', methods=['POST'])
-def add_order():
-    quantity = request.json['quantity']
-    oredDate = request.json['oredDate']
-    status = request.json['status']
-    complete = request.json['complete']
-    ticket_ticket_id = request.json['ticket_ticket_id']
-    user_user_id = request.json['user_user_id']
+#########################################################################
 
-    new_order = Order(quantity, oredDate, status, complete, ticket_ticket_id, user_user_id)
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer(), primary_key=True)
+    UsersId = db.Column(db.Integer(), db.ForeignKey(Users.id), nullable=False)
+    date = db.Column(db.String(100), nullable=False)
+    amount = db.Column(db.Integer(), nullable=False)
+    ExtraInfo = db.Column(db.String(100), nullable=False)
+    BankId = db.Column(db.Integer(), db.ForeignKey(Bank.id), nullable=False)
+
+    def __init__(self, UsersId, date, amount, ExtraInfo, BankId):
+        self.UsersId = UsersId
+        self.date = date
+        self.amount = amount
+        self.ExtraInfo = ExtraInfo
+        self.BankId = BankId
+
+
+class TransactionSchema(ma.Schema):
+    class Meta:
+        fields = ('id', 'UsersId', 'date', 'amount', 'ExtraInfo', 'BankId')
+
+
+transaction_schema = TransactionSchema()
+transaction_schemas = TransactionSchema(many=True)
+
+
+@app.route('/TransactionList', methods=['POST'])
+def add_transaction():
+    UsersId = request.json['UsersId']
+    date = request.json['date']
+    amount = request.json['amount']
+    ExtraInfo = request.json['ExtraInfo']
+    BankId = request.json['BankId']
+
+    bamk = Bank.query.get(BankId)
 
     try:
-        db.session.add(new_order)
+        check = (db.session.query(Bank).get(BankId))
+        check2 = check.amountOfMoney
+        bamk.amountOfMoney = check2 - amount
+    except:
+        return make_response(jsonify({'error': 'Bank not found'}), 404)
+
+    # check = (db.session.query(Bank).get(BankId))
+    # check2 = check.amountOfMoney
+    # bamk.amountOfMoney = check2 - amount
+
+    new_transaction = Transaction(UsersId, date, amount, ExtraInfo, BankId)
+    try:
+        if (check2 <= amount):
+            print(check2)
+            print(amount)
+            return Response(response="not enough money", status=200, mimetype="application/json")
+        db.session.add(new_transaction)
         db.session.commit()
     except IntegrityError:
         print('Incorrect data')
-        return make_response(jsonify({'error': 'Incorrect data'}), 409)
+        return make_response(jsonify({'error': 'Incorrect data'}), 404)
         # tasks.append(task)
-    a = to_json(new_order, Order)
+    a = to_json(new_transaction, Transaction)
     return Response(response=a, status=200, mimetype="application/json")
 
-    # db.session.add(new_order)
-    # db.session.commit()
-    #
-    # return order_schema.jsonify(new_order)
+    # return  transaction_schema.jsonify(new_transaction)
 
 
-@app.route('/order', methods=['GET'])
-def get_orders():
+@app.route('/TransactionList/<id>', methods=['GET'])
+def get_transaction(id):
+    try:
+        a = to_json(db.session.query(Transaction).filter_by(id=id).one, Transaction)
+        return Response(response=a, status=200, mimetype="application/json")
+    except:
+        return make_response(jsonify({'error': 'User not found'}), 404)
 
-    all_orders = Order.query.all()
-    result = orders_schema.dump(all_orders)
+
+# @app.route('/TransactionList/<id>', methods = ['PUT'])
+# def update_transaction(id):
+#     transaction = Transaction.query.get(id)
+#
+#     UsersId = request.json['UsersId']
+#     date = request.json['date']
+#     amount = request.json['amount']
+#     ExtraInfo = request.json['ExtraInfo']
+#     BankId = request.json['BankId']
+#
+#     transaction.UsersId = UsersId
+#     transaction.date = date
+#     transaction.amount = amount
+#     transaction.ExtraInfo = ExtraInfo
+#     transaction.BankId = BankId
+#
+#     db.session.commit()
+#
+#     return  transaction_schema.jsonify(transaction)
+
+@app.route('/TransactionList/<id>', methods=['DELETE'])
+def delete_transaction(id):
+    try:
+        a = db.session.query(Transaction).filter_by(id=id).first()
+        db.session.delete(a)
+        db.session.commit()
+        return {
+            "msg": "Transaction deleted successfully",
+            "id": id
+        }
+    except:
+        return "Transaction not found", 404
+
+
+@app.route('/TransactionList', methods=['GET'])
+def get_all_transaction():
+    try:
+        a = to_json(Transaction.query.all(), Bank)
+        result = transaction_schemas.dump(a)
+        return jsonify(result)
+    except:
+        return make_response(jsonify({'error': 'User not found'}), 404)
+
+    all_transaction = Transaction.query.all()
+    result = transaction_schemas.dump(all_transaction)
     return jsonify(result)
 
 
-@app.route('/order/<id>', methods=['GET'])
-def get_order(id):
-    try:
-        a = to_json(db.session.query(Order).filter_by(id=id).one(), Order)
-        return Response(response=a, status=200, mimetype="application/json")
-    except:
-        return make_response(jsonify({'error': 'Order not found'}), 404)
-    # order = Order.query.get(id)
-    # return order_schema.jsonify(order)
+#########################################################################
+
+
+# @app.errorhandler(400)
+# def handle_400_error(error):
+#     return make_response(jsonify({'error' : 'Bad  request'}),400)
+#
+# @app.errorhandler(404)
+# def handle_404_error(error):
+#     return make_response(jsonify({'error' : 'Not found'}),404)
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
