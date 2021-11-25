@@ -1,6 +1,6 @@
 import os.path
-
-import bcrypt as bcrypt
+from sqlalchemy import create_engine,Column,Integer,String,Enum,ForeignKey
+from flask_bcrypt import Bcrypt
 from flask import Flask, jsonify, request , make_response
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
@@ -12,6 +12,7 @@ from flask import make_response
 from flask import request
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import insert, null
+from flask_httpauth import HTTPBasicAuth
 
 
 def to_json(inst, cls):
@@ -35,10 +36,11 @@ def to_json(inst, cls):
 
 
 app = Flask(__name__)
-
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:1462357980@localhost:5432/lab_7'
+auth = HTTPBasicAuth()
+bcrypt = Bcrypt(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = "mysql+pymysql://root:root@127.0.0.1/pythonbd"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+#engine = create_engine("mysql+pymysql://root:root@127.0.0.1/pythonbd")
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
@@ -83,8 +85,12 @@ def add_createNewAccount():
     return  bank_schema.jsonify(new_bank)
 
 @app.route('/bank/<id>', methods = ['GET'])
+@auth.login_required()
 def get_bank(id):
-
+    user1 = auth.current_user()
+    fam_obj = Family.query.filter_by(BankId=id).first()
+    if int(user1.FamilyId) != int(fam_obj.id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     # try:
     #     a = to_json(db.session.query(Bank).filter_by(id=id).one,Bank)
     #     return Response(response=a, status=200, mimetype="application/json")
@@ -96,8 +102,12 @@ def get_bank(id):
 
 
 @app.route('/bank/<id>', methods = ['PUT'])
+@auth.login_required()
 def update_bank(id):
-
+    user1 = auth.current_user()
+    fam_obj = Family.query.filter_by(BankId=id).first()
+    if int(user1.FamilyId) != int(fam_obj.id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     a = db.session.query(Bank).filter_by(id=id).one()
     if not a:
         return make_response(jsonify({'error': 'Not found'}), 404)
@@ -115,8 +125,12 @@ def update_bank(id):
     return  bank_schema.jsonify(bamk)
 
 @app.route('/bank/<id>', methods = ['DELETE'])
+@auth.login_required()
 def delete_bank(id):
-
+    user1 = auth.current_user()
+    fam_obj = Family.query.filter_by(BankId=id).first()
+    if int(user1.FamilyId) != int(fam_obj.id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     try:
         bamk = db.session.query(Bank).filter_by(id=id).first()
         db.session.delete(bamk)
@@ -179,8 +193,11 @@ def get_family(id):
 
 
 @app.route('/family/<id>', methods = ['PUT'])
+@auth.login_required()
 def update_family(id):
-
+    user1 = auth.current_user()
+    if int(user1.FamilyId) != int(id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     a = db.session.query(Family).filter_by(id=id).one()
     if not a:
         return make_response(jsonify({'error': 'Not found'}), 404)
@@ -197,19 +214,22 @@ def update_family(id):
     return  family_schema.jsonify(family)
 
 @app.route('/family/<id>', methods = ['DELETE'])
+@auth.login_required()
 def delete_family(id):
-
+    user1 = auth.current_user()
+    if int(user1.FamilyId) != int(id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     try:
-        family = db.session.query(Family).filter_by(id=id).first()
-        db.session.delete(family)
+        a = db.session.query(Family).filter_by(id=id).first()
+        db.session.delete(a)
         db.session.commit()
         return {
             "msg": "Family deleted successfully",
             "id": id
         }
     except:
-        return "User not found", 404
-    
+        return "Family not found", 404
+
 
 
 #########################################################################
@@ -243,20 +263,30 @@ class UsersSchema(ma.Schema):
 
 users_schema = UsersSchema()
 
+@auth.verify_password
+def verify_password(username, password):
+    user = db.session.query(Users).filter_by(username = username).first()
+    if not user:
+        return False
+    if not bcrypt.check_password_hash(user.password.encode("utf-8"),password.encode("utf-8")):
+        return False
+    if user:
+        return user
+
+
 @app.route('/users', methods = ['POST'])
 def add_user():
     username = request.json['username']
     firstName = request.json['firstName']
     lastName = request.json['lastName']
     email = request.json['email']
-    password = request.json['password']
+    password = bcrypt.generate_password_hash(str(request.json.get('password'))).decode('utf-8'),
     phone = request.json['phone']
     FamilyId = request.json['FamilyId']
     userStatus = request.json['userStatus']
 
-    hashed=bcrypt.hashpw(password.encode('utf-8','ignore'), bcrypt.gensalt())
 
-    new_users = Users(username, firstName , lastName , email , hashed , phone , FamilyId, userStatus )
+    new_users = Users(username, firstName , lastName , email , password , phone , FamilyId, userStatus )
 
     tvins = (db.session.query(Users).filter_by(username=new_users.username).all())
 
@@ -285,7 +315,11 @@ def get_users(id):
 
 
 @app.route('/users/<id>', methods = ['PUT'])
+@auth.login_required()
 def update_users(id):
+    user1 = auth.current_user()
+    if int(user1.id) != int(id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     u = db.session.query(Users).filter_by(id=id).one()
     if not u:
         return make_response(jsonify({'error': 'Not found'}), 404)
@@ -299,7 +333,7 @@ def update_users(id):
     firstName = request.json['firstName']
     lastName = request.json['lastName']
     email = request.json['email']
-    password = request.json['password']
+    password = bcrypt.generate_password_hash(str(request.json.get('password'))).decode('utf-8'),
     phone = request.json['phone']
     FamilyId = request.json['FamilyId']
     userStatus = request.json['userStatus']
@@ -317,7 +351,11 @@ def update_users(id):
     return  users_schema.jsonify(users)
 
 @app.route('/users/<id>', methods = ['DELETE'])
+@auth.login_required()
 def delete_users(id):
+    user1 = auth.current_user()
+    if int(user1.id) != int(id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     try:
         users = db.session.query(Users).filter_by(id=id).first()
         db.session.delete(users)
@@ -371,7 +409,7 @@ def add_transaction():
     try:
         check = (db.session.query(Bank).get(BankId))
         check2 = check.amountOfMoney
-        bamk.amountOfMoney = check2 - amount
+        bamk.amountOfMoney = int(check2) - int(amount)
     except:
         return make_response(jsonify({'error': 'Bank not found'}), 404)
 
@@ -382,7 +420,7 @@ def add_transaction():
 
     new_transaction = Transaction(UsersId, date, amount, ExtraInfo, BankId )
     try:
-        if(check2 <= amount):
+        if(int(check2) <= int(amount)):
             print(check2)
             print(amount)
             return Response(response="not enough money", status=200, mimetype="application/json")
@@ -398,13 +436,21 @@ def add_transaction():
 
     #return  transaction_schema.jsonify(new_transaction)
 
+
+
 @app.route('/TransactionList/<id>', methods = ['GET'])
+@auth.login_required()
 def get_transaction(id):
+    trans_obj = Transaction.query.filter_by(id=id).first()
+    fam_obj = Family.query.filter_by(BankId=trans_obj.BankId).first()
+    user1 = auth.current_user()
+    if int(user1.FamilyId) != int(fam_obj.id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     try:
-        a = to_json(db.session.query(Transaction).filter_by(id=id).one, Transaction)
+        a = to_json(db.session.query(Transaction).filter_by(id=id).one(), Transaction)
         return Response(response=a, status=200, mimetype="application/json")
     except:
-        return make_response(jsonify({'error': 'User not found'}), 404)
+        return make_response(jsonify({'error': 'Transaction not found'}), 404)
 
 
 # @app.route('/TransactionList/<id>', methods = ['PUT'])
@@ -428,8 +474,13 @@ def get_transaction(id):
 #     return  transaction_schema.jsonify(transaction)
 
 @app.route('/TransactionList/<id>', methods = ['DELETE'])
+@auth.login_required()
 def delete_transaction(id):
-
+    trans_obj = Transaction.query.filter_by(id=id).first()
+    fam_obj = Family.query.filter_by(BankId=trans_obj.BankId).first()
+    user1 = auth.current_user()
+    if int(user1.FamilyId) != int(fam_obj.id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
     try:
         a = db.session.query(Transaction).filter_by(id=id).first()
         db.session.delete(a)
@@ -443,19 +494,26 @@ def delete_transaction(id):
 
 
 
-@app.route('/TransactionList', methods = ['GET'])
-def get_all_transaction():
+@app.route('/TransactionListF/<id>', methods = ['GET'])
+@auth.login_required()
+def get_all_transaction(id):
+    user1 = auth.current_user()
+    fam_obj = Family.query.filter_by(id=id).first()
+    if int(user1.FamilyId) != int(id):
+        return make_response(jsonify({'error': 'Access denied'}), 406)
+    a = db.session.query(Transaction).filter_by(BankId=fam_obj.BankId).all()
 
+    json_data = []
+    for i in a:
+        json_data.append(to_json(i, Transaction))
     try:
-        a = to_json(Transaction.query.all(),Bank)
-        result = transaction_schemas.dump(a)
-        return jsonify(result)
+        db.session.commit()
     except:
-        return make_response(jsonify({'error': 'User not found'}), 404)
+        return make_response(jsonify({'error': 'Not found'}), 404)
 
-    all_transaction = Transaction.query.all()
-    result = transaction_schemas.dump(all_transaction)
-    return jsonify(result)
+    return Response(response=str(json_data),
+                    status=200,
+                    mimetype="application/json")
 
 
 #########################################################################
